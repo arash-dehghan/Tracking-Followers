@@ -1,31 +1,26 @@
+from InstagramAPI import InstagramAPI
 import sqlite3
 import time
 import datetime
 import numpy as np
-from instagram.client import InstagramAPI
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib import style
+import random
+import argparse
 style.use('fivethirtyeight')
 
-#List of Instagram Accounts you want to plot
-mylist = ['INSTAGRAM ACCOUNT USERNAME 1', 'INSTAGRAM ACCOUNT USERNAME 2', 'INSTAGRAM ACCOUNT USERNAME 3','INSTAGRAM ACCOUNT USERNAME 4']
-InstaAccount = {}
+#### DATABASE SECTION ####
+def GrabAccountIDs(list_of_accounts):
+    list_of_account_ids = []
 
-#Create JSON objects of the Instagram accounts you want to plot. You will need to get their Access Token Number using the official Instagram API
-#Copy and paste this Instagram Account object as many times as you'd like to create more accounts to plot
-InstaAccount['INSTAGRAM ACCOUNT USERNAME 1'] = {
-'UserName' : 'YOUR USERNAME FOR THIS ACCOUNT',
-'Name' : 'ACCOUNT NAME',
-'Access_TokenNum' : 'INSTAGRAM ACCOUNT ACCESS TOKEN',
-'User_ID' : USER ID FOR ACCOUNT
-}
-
+    for account in list_of_accounts:
+        InstagramAPI.searchUsername(account)
+        user = InstagramAPI.LastJson
+        list_of_account_ids.append(user['user']['pk'])
+    return list_of_account_ids
 
 def create_table():
-    """
-    Create our SQLite table, establish the connection, create our table variables we want to have, such as Account name, Followers, Followers Gained, etc.
-    """
     conn = sqlite3.connect('FollowerCount.db')
     c = conn.cursor()
     #Upper case are SQL commands, could not capitalize it, but is then harder to read
@@ -34,9 +29,6 @@ def create_table():
     conn.close
 
 def dynamic_data_entry(account_name, follower_count):
-    """
-    Update the data we gathered into the SQLite Database dynamically
-    """
     conn = sqlite3.connect('FollowerCount.db')
     c = conn.cursor()
     #Setting the value of unix to time.time()
@@ -58,121 +50,106 @@ def dynamic_data_entry(account_name, follower_count):
     #We commit to save the changes to the database, we however don't close the connection and the cursor, since we will probably want to do this multiple times, and we don't want to waste time closing it each time only to have to re-open it. Check the bottom to see when we close it.
     conn.commit()
 
-def enter_followers():
-    """
-    Enter information into our database
-    """
+def enter_followers(mylist):
+
     conn = sqlite3.connect('FollowerCount.db')
     c = conn.cursor()
     create_table()
-
     for account in mylist:
-        token = InstaAccount[account]['Access_TokenNum']
-        api = InstagramAPI(access_token = token)
-        user_info = api.user(InstaAccount[account]['User_ID'])
-        number_of_followers = user_info.counts['followed_by']
-        #print(InstaAccount[account]['UserName'] + ' : ' + str(number_of_followers))
-        dynamic_data_entry(InstaAccount[account]['UserName'],number_of_followers)
-
+        InstagramAPI.getUsernameInfo(account)
+        user = InstagramAPI.LastJson
+        account_followers = user['user']['follower_count']
+        account_username = user['user']['username']
+        dynamic_data_entry(account_username,account_followers)
     c.close
     conn.close
 
-def graph_follower_progress():
-    """
-    Graph the followers count for each of our accounts based on the SQL data
-    """
+
+
+#### GRAPHING SECTION ####
+def graph_follower_progress(accounts):
     conn = sqlite3.connect('FollowerCount.db')
     c = conn.cursor()
 
-    fortnite_values = []
-    reddead_values = []
-    minecraft_values = []
-    apex_values = []
+    values = []
     dates = []
-    apex_dates = []
+    linestyles = ['-', '--', '-.', ':']
 
-    c.execute('SELECT Datestamp,Followers FROM FollowerCount WHERE Account = "FortniteClipsXX" ')
-    for value in c.fetchall():
-        dates.append(value[0])
-        fortnite_values.append(value[1])
-    c.execute('SELECT Followers FROM FollowerCount WHERE Account = "RedDeadClipsXX" ')
-    for value in c.fetchall():
-        reddead_values.append(value[0])
-    c.execute('SELECT Followers FROM FollowerCount WHERE Account = "BestOfMinecraftXX" ')
-    for value in c.fetchall():
-        minecraft_values.append(value[0])
-    c.execute('SELECT Datestamp,Followers FROM FollowerCount WHERE Account = "ApexClipsXX" ')
-    for value in c.fetchall():
-        apex_dates.append(value[0])
-        apex_values.append(value[1])
-    #Plot the 'dates' values as the x-axis, the 'values' values as the y-axis, and set the line to be formatted like '-'
-    plt.plot_date(dates,fortnite_values, ':', color = 'b')
-    plt.plot_date(dates,reddead_values, '--', color = 'r')
-    plt.plot_date(dates,minecraft_values, '-', color = 'g')
-    plt.plot_date(apex_dates,apex_values, '-.', color = 'y')
+    for account in accounts:
+        v = []
+        c.execute('SELECT Datestamp,Followers FROM FollowerCount WHERE Account =(?) ', (account,))
+        for value in c.fetchall():
+            v.append(value[1])
+            if account == accounts[0]:
+                dates.append(value[0])
+        values.append(v)
+
+    for i in range(0,len(values)):
+        plt.plot_date(dates,values[i], random.choice(linestyles), c = np.random.rand(3,))
 
     plt.title('Total Followers')
     plt.xlabel('Date')
     plt.ylabel('Followers')
 
+    plt.legend(accounts, loc='upper left')
 
-    plt.legend(['Fortnite', 'Red Dead 2', 'Minecraft','Apex Legends'], loc='upper left')
-    #Show the plot
     plt.show()
-
     c.close
     conn.close
 
-def graph_follower_gained_progress():
-    """
-    Graph the followers gained for each of our accounts based on the SQL data
-    """
+def graph_follower_gained_progress(accounts):
     conn = sqlite3.connect('FollowerCount.db')
     c = conn.cursor()
 
-    fortnite_values = []
-    reddead_values = []
-    minecraft_values = []
-    apex_values = []
+    values = []
     dates = []
-    apex_dates = []
+    linestyles = ['-', '--', '-.', ':']
 
-    c.execute('SELECT Datestamp,FollowersGained FROM FollowerCount WHERE Account = "FortniteClipsXX" ')
-    for value in c.fetchall():
-        dates.append(value[0])
-        fortnite_values.append(value[1])
-    c.execute('SELECT FollowersGained FROM FollowerCount WHERE Account = "RedDeadClipsXX" ')
-    for value in c.fetchall():
-        reddead_values.append(value[0])
-    c.execute('SELECT FollowersGained FROM FollowerCount WHERE Account = "BestOfMinecraftXX" ')
-    for value in c.fetchall():
-        minecraft_values.append(value[0])
-    c.execute('SELECT Datestamp,FollowersGained FROM FollowerCount WHERE Account = "ApexClipsXX" ')
-    for value in c.fetchall():
-        apex_dates.append(value[0])
-        apex_values.append(value[1])
-    #Plot the 'dates' values as the x-axis, the 'values' values as the y-axis, and set the line to be formatted like '-'
-    plt.plot_date(dates,np.array(fortnite_values), ':', color = 'b')
-    plt.plot_date(dates,np.array(reddead_values), '--', color = 'r')
-    plt.plot_date(dates,np.array(minecraft_values), '-', color = 'g')
-    plt.plot_date(apex_dates,np.array(apex_values), '-.', color = 'y')
+    for account in accounts:
+        v = []
+        c.execute('SELECT Datestamp,FollowersGained FROM FollowerCount WHERE Account =(?) ', (account,))
+        for value in c.fetchall():
+            v.append(value[1])
+            if account == accounts[0]:
+                dates.append(value[0])
+        values.append(v)
+    for i in range(0,len(values)):
+        plt.plot_date(dates,values[i], random.choice(linestyles), c = np.random.rand(3,))
 
-    plt.title('Followers Gained')
+    plt.title('Total Followers')
     plt.xlabel('Date')
     plt.ylabel('Followers')
 
-    plt.legend(['Fortnite', 'Red Dead 2', 'Minecraft', 'Apex Legends'], loc='upper left')
-    #Show the plot
-    plt.show()
+    plt.legend(accounts, loc='upper left')
 
+    plt.show()
     c.close
     conn.close
 
-"""
-Run enter_followers() to enter in follower inforamtion for each of our accounts
-graph_follower_gained_progress() to graph followers gained since last entry of data
-graph_follower_progress() to graph followers count
-"""
-# enter_followers()
-# graph_follower_gained_progress()
-# graph_follower_progress()
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Track and graph your Instagram growth!')
+    parser.add_argument('-user', '--username', type=str, help='Instagram username', required=True)
+    parser.add_argument('-pass', '--password', type=str, help='Instagram password', required=True)
+    parser.add_argument('-acc','--accounts', nargs='+', help='Accounts whose growth you want to track', required=True)
+    parser.add_argument('-e', '--enter_values', type=str, default='n', help='Enter values into SQL database')
+    parser.add_argument('-og', '--graph_overall', type=str, default='n', help='Graph overall follower growth')
+    parser.add_argument('-dg', '--graph_daily', type=str, default='n', help='Graph daily follower growth')
+
+    args = parser.parse_args()
+
+    assert(len(args.accounts) != 0), "No accounts provided to graph. Empty list!"
+
+    InstagramAPI = InstagramAPI(args.username, args.password)
+    InstagramAPI.login()
+
+    account_ids = GrabAccountIDs(args.accounts)
+
+    if args.enter_values == 'y':
+        enter_followers(account_ids)
+        print("Entered values into database")
+    if args.graph_overall == 'y':
+        graph_follower_progress(args.accounts)
+        print("Graphed overall follower progress")
+    if args.graph_daily == 'y':
+        graph_follower_gained_progress(args.accounts)
+        print("Graphed daily follower progress")
