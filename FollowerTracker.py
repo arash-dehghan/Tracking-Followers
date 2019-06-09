@@ -142,9 +142,8 @@ if __name__ == '__main__':
     InstagramAPI = InstagramAPI(args.username, args.password)
     InstagramAPI.login()
 
-    account_ids = GrabAccountIDs(args.accounts)
-
     if args.enter_values == 'y':
+        account_ids = GrabAccountIDs(args.accounts)
         enter_followers(account_ids)
         print("Entered values into database")
     if args.graph_overall == 'y':
